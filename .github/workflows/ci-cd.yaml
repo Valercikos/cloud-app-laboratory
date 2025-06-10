@@ -10,14 +10,14 @@ on:
 
 env:
   # Docker related variables
-  DOCKER_IMAGE_NAME: ${{ vars.DOCKER_IMAGE_NAME }}
+  DOCKER_IMAGE_NAME: ${{ vars.DOCKER_IMAGE_NAME || 'cloud-app-laboratory' }}
   DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'docker.io' }}
   
   # GCP related variables
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
   GKE_REGION: ${{ vars.GKE_REGION }}
-  GKE_DEPLOYMENT_NAME: ${{ vars.GKE_DEPLOYMENT_NAME }}
+  GKE_DEPLOYMENT_NAME: ${{ vars.GKE_DEPLOYMENT_NAME || 'cloud-app-lab' }}
 
 jobs:
   build:
@@ -41,18 +41,18 @@ jobs:
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           VERSION="v${DATE}-${SHORT_SHA}"
           
-          # Set the tag for the image (fără prefix "cloud-app-")
+          # Set the tag for the image
           TAG="${VERSION}"
           
           # Output the tag and version
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Generated image tag: $TAG"
+          echo "Docker image name: ${{ env.DOCKER_IMAGE_NAME }}"
 
       - name: Log in to Docker Registry
         uses: docker/login-action@v2
         with:
-          registry: ${{ env.DOCKER_REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -61,9 +61,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ steps.image_tag.outputs.tag }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ steps.image_tag.outputs.tag }},${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
 
   deploy:
     name: Deploy to GKE
@@ -100,19 +98,64 @@ jobs:
           
           echo "Deploying version $VERSION with image: $FULL_IMAGE_NAME"
           
-          # Replace variables in the deployment file
-          cat kubernetes/deployment.yaml | \
-            sed "s|\${DOCKER_REGISTRY}|${{ env.DOCKER_REGISTRY }}|g" | \
-            sed "s|\${DOCKER_NAMESPACE}|${{ secrets.DOCKERHUB_USERNAME }}|g" | \
-            sed "s|\${DOCKER_IMAGE_NAME}|${{ env.DOCKER_IMAGE_NAME }}|g" | \
-            sed "s|:latest|:${IMAGE_TAG}|g" > kubernetes/deployment-patched.yaml
+          # Create a temporary deployment file with the current image
+          cat <<EOF > deployment-patched.yaml
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${{ env.GKE_DEPLOYMENT_NAME }}
+            labels:
+              app: ${{ env.GKE_DEPLOYMENT_NAME }}
+              version: "${VERSION}"
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: ${{ env.GKE_DEPLOYMENT_NAME }}
+            strategy:
+              type: RollingUpdate
+              rollingUpdate:
+                maxSurge: 1
+                maxUnavailable: 0
+            template:
+              metadata:
+                labels:
+                  app: ${{ env.GKE_DEPLOYMENT_NAME }}
+              spec:
+                containers:
+                - name: app-container
+                  image: ${FULL_IMAGE_NAME}
+                  ports:
+                  - containerPort: 8080
+                  resources:
+                    requests:
+                      cpu: "100m"
+                      memory: "256Mi"
+                    limits:
+                      cpu: "500m"
+                      memory: "512Mi"
+                  readinessProbe:
+                    httpGet:
+                      path: /actuator/health
+                      port: 8080
+                    initialDelaySeconds: 30
+                    periodSeconds: 10
+                  livenessProbe:
+                    httpGet:
+                      path: /actuator/health
+                      port: 8080
+                    initialDelaySeconds: 60
+                    periodSeconds: 15
+                  env:
+                  - name: SPRING_PROFILES_ACTIVE
+                    value: "prod"
+                  - name: JAVA_OPTS
+                    value: "-XX:+UseContainerSupport -Xmx512m"
+          EOF
           
           # Apply the kubernetes manifests
-          kubectl apply -f kubernetes/deployment-patched.yaml
+          kubectl apply -f deployment-patched.yaml
           kubectl apply -f kubernetes/service.yaml
-          
-          # Add version label to deployment
-          kubectl patch deployment ${{ env.GKE_DEPLOYMENT_NAME }} -p "{\"metadata\":{\"labels\":{\"version\":\"${VERSION}\"}}}"
 
       - name: Verify deployment
         run: |
