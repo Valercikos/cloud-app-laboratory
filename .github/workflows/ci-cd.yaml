@@ -80,38 +80,12 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+      - name: Get GKE Credentials
+        uses: google-github-actions/get-gke-credentials@v1
         with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-
-      - name: Install kubectl and gke-gcloud-auth-plugin
-        run: |
-          echo "Installing kubectl..."
-          sudo apt-get update
-          sudo apt-get install -y apt-transport-https ca-certificates curl
-          sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
-          echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
-          sudo apt-get update
-          sudo apt-get install -y kubectl
-          
-          echo "Installing gke-gcloud-auth-plugin..."
-          sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
-          
-          echo "Configuring kubectl to use gke-gcloud-auth-plugin..."
-          export USE_GKE_GCLOUD_AUTH_PLUGIN=True
-          echo "export USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
-
-      - name: List available clusters
-        run: |
-          echo "Listing available clusters in project ${{ env.GCP_PROJECT_ID }}"
-          gcloud container clusters list --project "${{ env.GCP_PROJECT_ID }}"
-
-      - name: Get GKE credentials
-        run: |
-          echo "Connecting to cluster using exact command parameters:"
-          echo "gcloud container clusters get-credentials cloud-app-laboratory --region europe-central2 --project cloud-project-app-462517"
-          gcloud container clusters get-credentials cloud-app-laboratory --region europe-central2 --project cloud-project-app-462517
+          cluster_name: cloud-app-laboratory
+          location: europe-central2
+          project_id: cloud-project-app-462517
 
       - name: Deploy to Kubernetes
         run: |
@@ -177,10 +151,10 @@ jobs:
                     value: "-XX:+UseContainerSupport -Xmx512m"
           EOF
           
-          # Apply the kubernetes manifests without validation as fallback
-          kubectl apply -f deployment-patched.yaml || kubectl apply -f deployment-patched.yaml --validate=false
-          kubectl apply -f kubernetes/service.yaml || kubectl apply -f kubernetes/service.yaml --validate=false
+          # Apply the kubernetes manifests
+          kubectl apply -f deployment-patched.yaml
+          kubectl apply -f kubernetes/service.yaml
 
       - name: Verify deployment
         run: |
-          kubectl rollout status deployment/${{ env.GKE_DEPLOYMENT_NAME }} || echo "Could not verify deployment status"
+          kubectl rollout status deployment/${{ env.GKE_DEPLOYMENT_NAME }}
