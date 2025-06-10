@@ -13,8 +13,8 @@ RUN gradle build --no-daemon || return 0
 
 COPY . .
 
-# Build the project
-RUN gradle build --no-daemon
+# Build the project with task name specific
+RUN gradle assemble --no-daemon
 
 # Use a minimal JDK base image to run the app
 FROM eclipse-temurin:17-jdk-alpine
