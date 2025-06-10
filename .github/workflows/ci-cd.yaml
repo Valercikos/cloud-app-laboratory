@@ -15,9 +15,9 @@ env:
   
   # GCP related variables
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
-  GKE_REGION: ${{ vars.GKE_REGION }}
-  GKE_DEPLOYMENT_NAME: ${{ vars.GKE_DEPLOYMENT_NAME || 'cloud-app-lab' }}
+  GKE_CLUSTER_NAME: ${{ secrets.GKE_CLUSTER_NAME || 'cloud-app-laboratory' }}
+  GKE_REGION: ${{ secrets.GKE_REGION || 'europe-central2' }}
+  GKE_DEPLOYMENT_NAME: ${{ secrets.GKE_DEPLOYMENT_NAME || 'cloud-app-lab' }}
 
 jobs:
   build:
@@ -74,6 +74,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Verify GCP Variables
+        run: |
+          # Verifică dacă variabilele necesare sunt setate
+          if [ -z "${{ env.GCP_PROJECT_ID }}" ]; then
+            echo "Error: GCP_PROJECT_ID is not set. Please add it to repository secrets."
+            exit 1
+          fi
+          
+          if [ -z "${{ env.GKE_CLUSTER_NAME }}" ]; then
+            echo "Error: GKE_CLUSTER_NAME is not set. Using default: cloud-app-laboratory"
+          else
+            echo "GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}"
+          fi
+          
+          if [ -z "${{ env.GKE_REGION }}" ]; then
+            echo "Error: GKE_REGION is not set. Using default: europe-central2"
+          else
+            echo "GKE_REGION: ${{ env.GKE_REGION }}"
+          fi
+
       - name: Auth to Google Cloud
         id: auth
         uses: google-github-actions/auth@v1
@@ -87,7 +107,8 @@ jobs:
 
       - name: Get GKE credentials
         run: |
-          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_NAME }} --region ${{ env.GKE_REGION }} --project ${{ env.GCP_PROJECT_ID }}
+          echo "Getting credentials for cluster ${{ env.GKE_CLUSTER_NAME }} in region ${{ env.GKE_REGION }}"
+          gcloud container clusters get-credentials "${{ env.GKE_CLUSTER_NAME }}" --region "${{ env.GKE_REGION }}" --project "${{ env.GCP_PROJECT_ID }}"
 
       - name: Deploy to Kubernetes
         run: |
