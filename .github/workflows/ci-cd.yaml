@@ -132,18 +132,6 @@ jobs:
                     limits:
                       cpu: "250m"
                       memory: "256Mi"
-                  readinessProbe:
-                    httpGet:
-                      path: /
-                      port: 8080
-                    initialDelaySeconds: 30
-                    periodSeconds: 10
-                  livenessProbe:
-                    httpGet:
-                      path: /
-                      port: 8080
-                    initialDelaySeconds: 60
-                    periodSeconds: 15
                   env:
                   - name: SPRING_PROFILES_ACTIVE
                     value: "prod"
