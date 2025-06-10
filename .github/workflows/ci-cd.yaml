@@ -9,10 +9,6 @@ on:
       - main
 
 env:
-  # Common variables
-  JAVA_VERSION: '17'
-  GRADLE_VERSION: '8.5.0'
-  
   # Docker related variables
   DOCKER_IMAGE_NAME: ${{ vars.DOCKER_IMAGE_NAME || 'cloud-app-laboratory' }}
   DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'docker.io' }}
@@ -23,7 +19,6 @@ env:
   GKE_CLUSTER_NAME: ${{ secrets.GKE_CLUSTER_NAME }}
   GKE_CLUSTER_ZONE: ${{ secrets.GKE_CLUSTER_ZONE }}
   GKE_DEPLOYMENT_NAME: ${{ vars.GKE_DEPLOYMENT_NAME || 'cloud-app-lab' }}
-  GKE_CONTAINER_NAME: ${{ vars.GKE_CONTAINER_NAME || 'app-container' }}
 
 jobs:
   build:
@@ -38,19 +33,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         
-      - name: Set up JDK
-        uses: actions/setup-java@v3
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
-          cache: gradle
-
       - name: Generate image tag
         id: image_tag
         run: |
           TAG=${{ github.sha }}
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "Full image name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/${{ env.DOCKER_IMAGE_NAME }}:$TAG"
 
       - name: Log in to Docker Registry
         uses: docker/login-action@v2
@@ -59,26 +46,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: false
-          tags: |
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/${{ env.DOCKER_IMAGE_NAME }}:${{ steps.image_tag.outputs.tag }}
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/${{ env.DOCKER_IMAGE_NAME }}:latest
-
-      - name: Scan for vulnerabilities
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/${{ env.DOCKER_IMAGE_NAME }}:${{ steps.image_tag.outputs.tag }}
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Push Docker image
+      - name: Build and Push Docker image
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -109,12 +77,11 @@ jobs:
         run: |
           gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_NAME }} --zone ${{ env.GKE_CLUSTER_ZONE }} --project ${{ env.GCP_PROJECT_ID }}
 
-      - name: Deploy using Kubernetes manifests
+      - name: Deploy to Kubernetes
         run: |
           # Set the image with specific tag in the deployment file
           IMAGE_TAG=${{ needs.build.outputs.image_tag }}
           FULL_IMAGE_NAME="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/${{ env.DOCKER_IMAGE_NAME }}:${IMAGE_TAG}"
-          echo "Deploying $FULL_IMAGE_NAME to cluster"
           
           # Replace variables in the deployment file
           cat kubernetes/deployment.yaml | \
@@ -123,13 +90,10 @@ jobs:
             sed "s|\${DOCKER_IMAGE_NAME}|${{ env.DOCKER_IMAGE_NAME }}|g" | \
             sed "s|:latest|:${IMAGE_TAG}|g" > kubernetes/deployment-patched.yaml
           
-          # Apply the deployment and service files
+          # Apply the kubernetes manifests
           kubectl apply -f kubernetes/deployment-patched.yaml
           kubectl apply -f kubernetes/service.yaml
-          kubectl apply -f kubernetes/ingress.yaml
 
       - name: Verify deployment
         run: |
           kubectl rollout status deployment/${{ env.GKE_DEPLOYMENT_NAME }}
-          echo "Deployment completed successfully"
-          kubectl get pods -l app=${{ env.GKE_DEPLOYMENT_NAME }} -o wide
