@@ -10,15 +10,15 @@ on:
 
 env:
   # Docker related variables
-  DOCKER_IMAGE_NAME: ${{ vars.DOCKER_IMAGE_NAME || 'cloud-app-laboratory' }}
+  DOCKER_IMAGE_NAME: ${{ vars.DOCKER_IMAGE_NAME }}
   DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'docker.io' }}
   DOCKER_NAMESPACE: ${{ secrets.DOCKER_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
   
   # GCP related variables
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GKE_CLUSTER_NAME: ${{ secrets.GKE_CLUSTER_NAME }}
-  GKE_CLUSTER_ZONE: ${{ secrets.GKE_CLUSTER_ZONE }}
-  GKE_DEPLOYMENT_NAME: ${{ vars.GKE_DEPLOYMENT_NAME || 'cloud-app-lab' }}
+  GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
+  GKE_REGION: ${{ vars.GKE_REGION }}
+  GKE_DEPLOYMENT_NAME: ${{ vars.GKE_DEPLOYMENT_NAME }}
 
 jobs:
   build:
@@ -90,7 +90,7 @@ jobs:
 
       - name: Get GKE credentials
         run: |
-          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_NAME }} --zone ${{ env.GKE_CLUSTER_ZONE }} --project ${{ env.GCP_PROJECT_ID }}
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_NAME }} --region ${{ env.GKE_REGION }} --project ${{ env.GCP_PROJECT_ID }}
 
       - name: Deploy to Kubernetes
         run: |
