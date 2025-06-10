@@ -8,7 +8,6 @@ WORKDIR /app
 COPY build.gradle.kts settings.gradle.kts ./
 COPY gradle ./gradle
 
-# Download dependencies
 RUN gradle build --no-daemon || return 0
 
 # Copy the full source code
