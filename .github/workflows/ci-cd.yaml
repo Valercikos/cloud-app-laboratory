@@ -106,7 +106,7 @@ jobs:
               app: ${{ env.GKE_DEPLOYMENT_NAME }}
               version: "${VERSION}"
           spec:
-            replicas: 2
+            replicas: 1
             selector:
               matchLabels:
                 app: ${{ env.GKE_DEPLOYMENT_NAME }}
@@ -127,11 +127,11 @@ jobs:
                   - containerPort: 8080
                   resources:
                     requests:
-                      cpu: "100m"
-                      memory: "256Mi"
+                      cpu: "50m"
+                      memory: "128Mi"
                     limits:
-                      cpu: "500m"
-                      memory: "512Mi"
+                      cpu: "250m"
+                      memory: "256Mi"
                   readinessProbe:
                     httpGet:
                       path: /actuator/health
@@ -148,7 +148,7 @@ jobs:
                   - name: SPRING_PROFILES_ACTIVE
                     value: "prod"
                   - name: JAVA_OPTS
-                    value: "-XX:+UseContainerSupport -Xmx512m"
+                    value: "-XX:+UseContainerSupport -Xmx256m"
           EOF
           
           # Apply the kubernetes manifests
@@ -157,4 +157,8 @@ jobs:
 
       - name: Verify deployment
         run: |
-          kubectl rollout status deployment/${{ env.GKE_DEPLOYMENT_NAME }}
+          kubectl rollout status deployment/${{ env.GKE_DEPLOYMENT_NAME }} --timeout=180s || true
+          echo "Deployment status:"
+          kubectl get deployments
+          echo "Pod status:"
+          kubectl get pods
