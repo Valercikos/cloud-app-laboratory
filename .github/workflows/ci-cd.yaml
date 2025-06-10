@@ -42,8 +42,8 @@ jobs:
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           VERSION="v${DATE}-${SHORT_SHA}"
           
-          # Set the full tag for the image
-          TAG="cloud-app-${VERSION}"
+          # Set the tag for the image (fără prefix "cloud-app-")
+          TAG="${VERSION}"
           
           # Output the tag and version
           echo "tag=$TAG" >> $GITHUB_OUTPUT
