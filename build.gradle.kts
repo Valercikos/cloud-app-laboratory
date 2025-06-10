@@ -38,5 +38,5 @@ tasks.withType<Test> {
 }
 
 springBoot {
-    mainClass.set("md.utm.cloudapp.CloudAppApplication")
+    mainClass.set("md.utm.cloudapp.MainApplicationKt")
 }
